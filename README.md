@@ -1,7 +1,7 @@
 <h1 align="center">dsh-model-in-use</h1>
 
 <p align="center">
-  <em>让 DSH 的模型菜单看见占用、记住档位、记住折叠状态。</em>
+  <em>让 DSH 的模型菜单看见会话占用、记住模型推理档位与折叠状态。</em>
 </p>
 
 <p align="center">
