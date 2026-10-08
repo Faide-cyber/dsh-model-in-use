@@ -1,0 +1,5 @@
+# Bundle patch for dsh-model-in-use: inserts its plugin row into the web
+# profile roster so the client half is mounted with the rest of the Web bundle.
+- insert:
+    - id: model-in-use
+      name: 'dsh-model-in-use'
