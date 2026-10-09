@@ -14,6 +14,14 @@
 
 ---
 
+<p align="center">
+  <img src="./docs/images/model-menu.png" alt="模型菜单：被其他会话占用的模型行尾带圆点，悬浮卡显示当前模型与推理档位" width="100%">
+</p>
+
+<p align="center">
+  <img src="./docs/images/session-hover.png" alt="会话悬浮卡的「进行中」后追加当前模型与推理档位" width="342">
+</p>
+
 ## 它做什么
 
 一个独立的 DSH **客户端（web）cordis 插件**，只装饰宿主已有的模型菜单，不改宿主包、不引入运行时依赖。
