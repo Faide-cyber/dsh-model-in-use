@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import {
   el,
   loadClient,
+  makeStorageReadOnly,
   mountCodexMenu,
   codexRowFor,
   clickOn,
@@ -640,6 +641,38 @@ console.log('17. the effort memory survives a reload and a throwing storage')
     second.directoryCalls.at(-1)?.provider === 'deepseek-account')
   second.dispose()
   globalThis.localStorage = real
+
+  // A storage that stays READABLE but refuses writes is the failure that looks
+  // like "it worked, then silently stopped remembering": every read comes back
+  // empty, so a lookup that trusted the storage would erase the level this page
+  // already learned and pick the provider default again.
+  const third = await start({ rows: [session('self', A)], groups: EFFORT_GROUPS })
+  const dir3 = third.modelDirectories.directoryFor('self')
+  third.setCurrent({ ...A, reasoningEffort: 'low' })
+  await dir3.select({ ...A, reasoningEffort: 'high' })
+
+  const restore = makeStorageReadOnly()
+  try {
+    // The write is rejected, so as far as the storage is concerned nothing was
+    // ever remembered; the live copy is the only thing that knows about `high`.
+    globalThis.localStorage.removeItem(EFFORT_KEY)
+    third.setCurrent({ ...B, reasoningEffort: 'medium' })
+    await dir3.select({ ...A, reasoningEffort: 'low' })
+    check('a storage that accepts reads but rejects writes does not lose the level',
+      third.directoryCalls.at(-1)?.reasoningEffort === 'high')
+    check('and the storage still knows nothing, i.e. the write really failed',
+      storedEffort(A.model) === undefined)
+  } finally {
+    restore()
+  }
+  // Once the storage accepts writes again, the very next selection persists the
+  // level even though it is the same value the live copy already holds — that
+  // retry is the whole point of tracking the stale write.
+  third.setCurrent({ ...B, reasoningEffort: 'medium' })
+  await dir3.select({ ...A, reasoningEffort: 'low' })
+  check('and the next selection writes it back to the storage',
+    storedEffort(A.model) === 'high')
+  third.dispose()
 }
 
 // --- 18. existing sessions seed memory; later sessions are hooked ----------

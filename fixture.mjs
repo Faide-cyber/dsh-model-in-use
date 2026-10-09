@@ -238,9 +238,14 @@ function isDescendant(node, ancestor) {
 /** A Storage good enough for one key, with a working clear() for test resets. */
 function createStorage() {
   const map = new Map()
-  return {
+  const storage = {
     getItem: key => (map.has(String(key)) ? map.get(String(key)) : null),
     setItem: (key, value) => {
+      if (storage.readOnly === true) {
+        const error = new Error('QuotaExceededError: storage is full')
+        error.name = 'QuotaExceededError'
+        throw error
+      }
       map.set(String(key), String(value))
     },
     removeItem: key => {
@@ -248,12 +253,27 @@ function createStorage() {
     },
     clear: () => map.clear()
   }
+  return storage
 }
 
 // A real Storage, installed once per process. The collapse memory is the one
 // thing the plugin is expected to carry ACROSS a remount, so it must outlive
 // `loadClient` — that is the whole point of the persistence check.
 globalThis.localStorage ??= createStorage()
+
+/**
+ * Make every later `setItem` throw, the way a full or evicted storage does.
+ * Returns a restore function. Used to prove the effort memory survives a
+ * storage that refuses the write instead of silently losing the level.
+ */
+export function makeStorageReadOnly() {
+  const storage = globalThis.localStorage
+  const previous = storage.readOnly
+  storage.readOnly = true
+  return () => {
+    storage.readOnly = previous
+  }
+}
 
 /**
  * Dispatch a bubbling event at `target` through the document-level listeners the

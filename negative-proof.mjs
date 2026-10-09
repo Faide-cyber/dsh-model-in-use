@@ -338,7 +338,7 @@ const VARIANTS = [
   },
   {
     label: 'existing durable selections never seed missing model effort memory',
-    from: '          if (changed) writeEfforts(efforts)',
+    from: '          if (changed) writeEfforts()',
     to: '          void changed',
     rows: [session('self', { ...B, reasoningEffort: 'ultra' })],
     probe: () => storedEffort(B.model),
