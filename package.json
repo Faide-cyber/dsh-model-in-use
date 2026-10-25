@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-in-use",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DSH model-menu enhancements: dots for models in use by other running sessions, per-model reasoning-effort memory, collapsed group state, and menu spacing fixes.",
   "type": "module",
   "main": "lib/index.js",

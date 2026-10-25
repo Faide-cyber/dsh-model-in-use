@@ -325,6 +325,19 @@ export async function loadClient(clientPath) {
     head: el('head'),
     createElement: tag => el(tag),
     querySelectorAll: selector => globalThis.document.body.querySelectorAll(selector),
+    // Only the injected <style> is ever looked up by id. A real walk, rather
+    // than a registry, keeps `remove` honest: removed means absent again.
+    getElementById: id => {
+      const walk = node => {
+        if (node.id === id || node.attrs?.id === id) return node
+        for (const child of node.children) {
+          const hit = walk(child)
+          if (hit !== null) return hit
+        }
+        return null
+      }
+      return walk(globalThis.document.head) ?? walk(globalThis.document.body)
+    },
     addEventListener: (type, handler) => {
       listeners.push({ type, handler })
     },
@@ -601,6 +614,11 @@ export function codexGroupSection(group, reactId = 'r1') {
  * element exists, the trigger exists, the menu does not. Adding this element to
  * <body> is a body childList mutation — it happens once, when the conversation
  * loads, long before any menu opens.
+ *
+ * The trigger deliberately carries NO `aria-controls` while the menu is closed,
+ * matching the real trigger (`dsh-client-ui-model-selection lib/client.js:843`).
+ * `openCodexMenu` adds it, and only then is the composing conversation knowable
+ * from the open menu.
  */
 export function mountComposer({ menuId = 'r1-menu', sessionId = 'self' } = {}) {
   const body = globalThis.document.body
@@ -610,14 +628,30 @@ export function mountComposer({ menuId = 'r1-menu', sessionId = 'self' } = {}) {
       type: 'button',
       class: 'codexModelSelectTrigger',
       'aria-haspopup': 'menu',
-      'aria-expanded': 'false',
-      'aria-controls': menuId
+      'aria-expanded': 'false'
     })
   ])
+  // The real layout puts the composer OUTSIDE the session-stamped element.
+  // `dsh-client-ui-conversation lib/client.js:16329-16344` renders
+  //   <div class="body" data-conversation-session={sessionId} data-conversation-region="chat">
+  //     <div class="scrollBody">
+  //       <Views/>                                  ← chat, inside the stamped div
+  //       <div class="composerSeat" data-conversation-region="composer">{composer}</div>
+  //     </div>
+  //   </div>
+  // — the composerSeat is a SIBLING of the chat views and a DESCENDANT of the
+  // stamped body, so `trigger.closest('[data-conversation-session]')` does
+  // resolve in the real app. The version of this fixture that nested the
+  // composer directly under the stamped div could not distinguish the two
+  // shapes, which is why the sibling case went untested.
   body.append(
-    el('div', { 'data-conversation-session': sessionId }, [
-      el('div', { class: 'conversationBody' }, [
-        el('div', { class: 'composerSeat' }, [composerBar])
+    el('div', {
+      'data-conversation-session': sessionId,
+      'data-conversation-region': 'chat'
+    }, [
+      el('div', { class: 'scrollBody' }, [
+        el('div', { class: 'conversationBody' }),
+        el('div', { class: 'composerSeat', 'data-conversation-region': 'composer' }, [composerBar])
       ])
     ])
   )
@@ -625,18 +659,26 @@ export function mountComposer({ menuId = 'r1-menu', sessionId = 'self' } = {}) {
 }
 
 /**
- * Open the menu by inserting it into the ALREADY MOUNTED composer.
+ * Open the menu by inserting it beside the trigger, exactly as the real app does.
  *
- * The nesting is the whole point. CodexModelSelect is the `conversation.input
- * .model` slot's content, so its menu lands deep inside the composer subtree —
- * it is not portaled to <body>. Opening it therefore adds descendants without
- * changing <body>'s direct children, and a `{childList:true}`-only body
- * observer never sees it. A fixture that instead appends a fresh session div to
- * <body> would hand that broken observer a body mutation and let it pass.
+ * `CodexModelSelect` renders `div.codexModelSelectMenu` as a SIBLING of
+ * `button.codexModelSelectTrigger`, both inside its own `div.codexModelSelect`
+ * root (`dsh-codex-subscription lib/client.js:9229-9264`), and closes on outside
+ * clicks via `rootRef.current.contains(event.target)` (`:9014`) — which only
+ * works while the menu is inside that root. There is no portal here: the native
+ * `ModelSelect` in `dsh-client-ui-model-selection` DOES portal through
+ * `MenuSurface` (`:871`), the Codex one does not. So the menu appears deep in the
+ * composer subtree and never as a direct <body> child — which is precisely why a
+ * `{childList:true}`-only body observer cannot see it open.
+ *
+ * The remaining link between the two is the trigger's `aria-controls`, which the
+ * real trigger only carries while it is open (`open ? `${id}-menu` : void 0`,
+ * dsh-client-ui-model-selection `lib/client.js:843`). So the trigger is given
+ * its `aria-controls` here for the duration of the open menu, mirroring that.
  *
  * @param groups - catalog-shaped groups, rendered top to bottom.
  * @param menuId - the id the trigger's `aria-controls` points at.
- * @param composerBar - where to insert; defaults to the last mounted composer.
+ * @param composerBar - whose trigger to point at; defaults to the last mounted.
  */
 export function openCodexMenu(groups, { menuId = 'r1-menu', composerBar } = {}) {
   const host =
@@ -645,6 +687,8 @@ export function openCodexMenu(groups, { menuId = 'r1-menu', composerBar } = {}) 
   if (host === null || host === undefined) {
     throw new Error('fixture: openCodexMenu needs a mounted composer (call mountComposer first)')
   }
+  const trigger = host.querySelector('button.codexModelSelectTrigger')
+  if (trigger !== null && trigger !== undefined) trigger.setAttribute('aria-controls', menuId)
   const reactId = menuId.replace(/-menu$/, '')
   host.append(
     el('div', { class: 'codexModelSelectMenu', id: menuId, role: 'menu' }, [

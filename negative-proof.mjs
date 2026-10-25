@@ -121,8 +121,8 @@ const VARIANTS = [
   },
   {
     label: 'a session with no projection uses lastUsed instead of the live pick',
-    from: 'row.projectionValues?.modelSelection?.next ?? fallback',
-    to: 'row.projectionValues?.modelSelection?.lastUsed ?? fallback',
+    from: 'const selection = selectionOf(row) ?? fallback',
+    to: 'const selection = row.projectionValues?.modelSelection?.lastUsed ?? fallback',
     rows: [
       session('self', A),
       {
@@ -510,6 +510,41 @@ const VARIANTS = [
     probe: ctx => String(ctx.slotEntries.find(entry => entry.options.name === 'sidebar.session.row.hover')?.component)
       .includes("closest?.('[data-slot=\"sidebar.session.row.hover\"]')"),
     brokenValue: false
+  },
+  {
+    // The bug this plugin shipped with. `modelSelection.{next,lastUsed}` are
+    // `null` — not absent — for a conversation that has no selection yet, and
+    // `??` keeps a null PAIR. Reading `null.reasoningEffort` then threw from the
+    // cold apply, which aborted the wiring before anything was observed: no
+    // observer, no scan, no stylesheet — the menu stayed plain all session.
+    label: 'a null modelSelection is read as if it were merely absent',
+    from: 'const selection = selectionOf(row)\n            if (selection === undefined || !catalogReady) continue',
+    to: 'const selection = row.projectionValues?.modelSelection?.next ?? row.projectionValues?.modelSelection?.lastUsed\n            if (selection === undefined || !catalogReady) continue',
+    rows: [
+      session('self', A),
+      { id: 'blank', running: true, projectionValues: { modelSelection: { next: null, lastUsed: null } } }
+    ],
+    expectThrow: true,
+    probe: () => 'no throw',
+    brokenValue: "threw: Cannot read properties of null (reading 'reasoningEffort')"
+  },
+  {
+    // The attributes that draw the dots and arrows only mean something while the
+    // stylesheet is mounted. Anything that tears the wiring down — a replaced
+    // <head>, a client reload — leaves them on the nodes with nothing to render
+    // them, which from the outside is "the green dot disappeared".
+    label: 'the stylesheet is never re-asserted after it disappears',
+    from: 'if (!document.getElementById(STYLE_ID)) (document.head ?? document.documentElement).append(style)',
+    to: 'void 0',
+    rows: [session('self', A), session('other', B)],
+    drive: async ctx => {
+      globalThis.document.getElementById('dsh-model-in-use-style')?.remove()
+      ctx.setRows([session('self', A), session('other', B)])
+      await settle()
+    },
+    probe: () =>
+      globalThis.document.getElementById('dsh-model-in-use-style') === null ? 'missing' : 'present',
+    brokenValue: 'missing'
   }
 ]
 
@@ -580,7 +615,16 @@ for (const [index, variant] of VARIANTS.entries()) {
     // Opening it inserts descendants deep in the composer — never a new <body>
     // child — so variant 6 cannot pass by accident.
     mountComposer({ menuId: 'r1-menu' })
-    exports.apply(ctx)
+    // A throw out of `apply` is itself a legitimate observation: the bug this
+    // plugin shipped with threw here and left the menu undecorated for the whole
+    // session, so a variant may declare that as its broken outcome.
+    let setupError
+    try {
+      exports.apply(ctx)
+    } catch (error) {
+      if (variant.expectThrow !== true) throw error
+      setupError = error
+    }
     openCodexMenu(groups, { menuId: 'r1-menu' })
     await settle()
 
@@ -593,7 +637,7 @@ for (const [index, variant] of VARIANTS.entries()) {
       await settle()
     }
 
-    const observed = variant.probe(ctx)
+    const observed = setupError === undefined ? variant.probe(ctx) : `threw: ${setupError.message}`
     if (observed === variant.brokenValue) {
       console.log(`  ok  variant ${index + 1}: caught — ${variant.label}`)
     } else {

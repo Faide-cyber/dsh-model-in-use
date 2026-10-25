@@ -662,16 +662,29 @@ console.log('17. the effort memory survives a reload and a throwing storage')
       third.directoryCalls.at(-1)?.reasoningEffort === 'high')
     check('and the storage still knows nothing, i.e. the write really failed',
       storedEffort(A.model) === undefined)
+
+    // A *model switch* never reaches the write path — by design it only reads
+    // the binding. So the stale-write flag can only be set by a shape that
+    // really writes: an effort edit on the current model. This edit is rejected
+    // by the storage, which is what arms the retry below; the live copy now
+    // holds `low` while the storage still holds nothing.
+    third.setCurrent({ ...A, reasoningEffort: 'high' })
+    await dir3.select({ ...A, reasoningEffort: 'low' })
+    check('an effort edit rejected by the storage is what arms the retry',
+      storedEffort(A.model) === undefined)
+    check('and the live copy still carries the rejected level',
+      third.directoryCalls.at(-1)?.reasoningEffort === 'low')
   } finally {
     restore()
   }
-  // Once the storage accepts writes again, the very next selection persists the
-  // level even though it is the same value the live copy already holds — that
-  // retry is the whole point of tracking the stale write.
+  // Once the storage accepts writes again, the very next selection is the
+  // moment to catch the write up: the retry rides on it and persists what the
+  // live copy holds. Without the stale marker this write would never happen —
+  // nothing changed since, so the edit branch sees no difference to record.
   third.setCurrent({ ...B, reasoningEffort: 'medium' })
   await dir3.select({ ...A, reasoningEffort: 'low' })
-  check('and the next selection writes it back to the storage',
-    storedEffort(A.model) === 'high')
+  check('and the next selection writes the rejected level back to the storage',
+    storedEffort(A.model) === 'low')
   third.dispose()
 }
 
@@ -849,6 +862,38 @@ console.log('21. an instance-own select still carries the remembered level')
   check('the first call already carries the remembered level',
     calls.length > 0 && calls[0].reasoningEffort === 'high')
   check('and no second call is needed to correct it', calls.length === 1)
+
+  ctx.dispose()
+}
+
+// --- 22. a null projection does not disarm the decorator ------------------
+// `modelSelection.{next,lastUsed}` are `null` — not absent — for a conversation
+// that has no selection yet. `??` only skips the property it reads, so a null
+// PAIR survives it; reading `null.reasoningEffort` then threw both from inside
+// the store subscriber and from the cold apply, and the latter aborted the whole
+// wiring: no observer, no scan, no stylesheet — a permanently plain menu.
+console.log('22. a conversation with a null selection does not disarm the decorator')
+{
+  const blank = {
+    id: 'blank',
+    running: true,
+    projectionValues: { modelSelection: { next: null, lastUsed: null } }
+  }
+  const ctx = await start({ rows: [session('self', A), session('other', B), blank] })
+
+  check('the menu is still decorated',
+    headingFor('Hy3 · x0.00')?.hasAttribute('data-dsh-group-toggle') === true)
+  check('the in-use dot still lands', marked('Hy3 · x0.00'))
+
+  // The same wiring owns the stylesheet. Anything that drops it leaves the
+  // attributes sitting over unstyled nodes: dots and arrows just invisible.
+  const style = globalThis.document.getElementById('dsh-model-in-use-style')
+  check('the stylesheet is mounted', style !== null)
+  style?.remove()
+  ctx.setRows([session('self', A), session('other', B), blank])
+  await settle()
+  check('the stylesheet comes back on the next scan',
+    globalThis.document.getElementById('dsh-model-in-use-style') !== null)
 
   ctx.dispose()
 }
