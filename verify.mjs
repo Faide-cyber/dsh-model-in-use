@@ -35,7 +35,9 @@ const DICTS = {
   'dsh-model-in-use': {
     inUse: IN_USE,
     expandGroup: '展开此提供商的模型',
-    collapseGroup: '收起此提供商的模型'
+    collapseGroup: '收起此提供商的模型',
+    expandAll: '全部展开',
+    collapseAll: '全部折叠'
   }
 }
 
@@ -896,6 +898,50 @@ console.log('22. a conversation with a null selection does not disarm the decora
     globalThis.document.getElementById('dsh-model-in-use-style') !== null)
 
   ctx.dispose()
+}
+
+// --- 23. one icon folds or unfolds every group ----------------------------
+// The control carries no text of its own: the wording lives in `title`, so the
+// pane keeps its height and the icon only explains itself on hover.
+console.log('23. one icon folds and unfolds every group')
+{
+  const ctx = await start({ rows: [session('self', A)] })
+
+  const all = () => globalThis.document.body.querySelector('div[data-dsh-collapse-all]')
+  check('the pane carries the icon', all() !== null)
+  check('it is announced as a button', all()?.getAttribute('role') === 'button')
+  check('it is reachable by keyboard', all()?.getAttribute('tabindex') === '0')
+  check('it shows no text of its own', all()?.textContent === '')
+  check('the label is a hover title', all()?.getAttribute('title') === '全部折叠')
+  check('the icon faces the action a click makes', all()?.getAttribute('data-dsh-all') === 'expanded')
+
+  clickOn(all())
+  await settle()
+  check('one click folds every group',
+    collapsedState('Hy3 · x0.00') === 'true' && collapsedState('DeepSeek-V41-Flash') === 'true')
+  const stored = JSON.parse(globalThis.localStorage.getItem(COLLAPSE_KEY) ?? 'null')
+  check('the whole set is remembered', stored?.workbuddyai === true && stored?.['deepseek-account'] === true)
+  check('the icon now offers to unfold', all()?.getAttribute('title') === '全部展开')
+  check('and turns around to say so', all()?.getAttribute('data-dsh-all') === 'collapsed')
+
+  clickOn(all())
+  await settle()
+  check('a second click unfolds them again',
+    collapsedState('Hy3 · x0.00') === 'false' && collapsedState('DeepSeek-V41-Flash') === 'false')
+
+  // Folding one group by hand must not leave the icon claiming "unfold".
+  clickOn(headingFor('Hy3 · x0.00'))
+  await settle()
+  check('a manual fold leaves the icon offering to fold',
+    all()?.getAttribute('title') === '全部折叠')
+
+  keyOn(all(), 'Enter')
+  await settle()
+  check('Enter folds them all', collapsedState('DeepSeek-V41-Flash') === 'true')
+
+  ctx.dispose()
+  check('dispose takes the icon with it',
+    globalThis.document.body.querySelector('div[data-dsh-collapse-all]') === null)
 }
 
 console.log(

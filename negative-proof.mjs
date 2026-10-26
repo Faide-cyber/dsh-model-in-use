@@ -31,7 +31,9 @@ const DICTS = {
   'dsh-model-in-use': {
     inUse: '其他会话正在使用中',
     expandGroup: '展开此提供商的模型',
-    collapseGroup: '收起此提供商的模型'
+    collapseGroup: '收起此提供商的模型',
+    expandAll: '全部展开',
+    collapseAll: '全部折叠'
   }
 }
 const GROUPS = [
@@ -545,6 +547,18 @@ const VARIANTS = [
     probe: () =>
       globalThis.document.getElementById('dsh-model-in-use-style') === null ? 'missing' : 'present',
     brokenValue: 'missing'
+  },
+  {
+    label: 'the all-groups icon never folds anything (fold hard-wired to false)',
+    from: "const fold = sections.some(\n              section => section.getAttribute('data-dsh-group-collapsed') !== 'true'\n            )",
+    to: 'const fold = false',
+    rows: [session('self', A), session('other', B)],
+    drive: async () => {
+      clickOn(globalThis.document.body.querySelector('div[data-dsh-collapse-all]'))
+      await settle()
+    },
+    probe: () => collapsed('Hy3 · x0.00'),
+    brokenValue: 'false'
   }
 ]
 

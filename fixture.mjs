@@ -34,6 +34,14 @@ export function el(tag, attrs = {}, children = []) {
       return this.children[0] ?? null
     }
   })
+  // Real DOM spells it `parentNode`; `parent` is this fixture's internal slot.
+  // A querySelector scoped to the parent is how the plugin finds its own icon
+  // among its siblings, so that spelling has to work here too.
+  Object.defineProperty(node, 'parentNode', {
+    get() {
+      return this.parent
+    }
+  })
   Object.defineProperty(node, 'title', {
     get() {
       return this.attrs.title ?? ''
@@ -131,6 +139,16 @@ export function el(tag, attrs = {}, children = []) {
       node.children.push(child)
       FixtureMutationObserver.notify(node, [child], [])
     }
+  }
+  node.insertBefore = (child, reference) => {
+    child.parent = node
+    const at =
+      reference === null || reference === undefined
+        ? node.children.length
+        : node.children.indexOf(reference)
+    node.children.splice(at < 0 ? node.children.length : at, 0, child)
+    FixtureMutationObserver.notify(node, [child], [])
+    return child
   }
   node.remove = () => {
     const parent = node.parent
