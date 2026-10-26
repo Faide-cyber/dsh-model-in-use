@@ -33,7 +33,9 @@ const DICTS = {
     expandGroup: '展开此提供商的模型',
     collapseGroup: '收起此提供商的模型',
     expandAll: '全部展开',
-    collapseAll: '全部折叠'
+    collapseAll: '全部折叠',
+    sortByName: '名称排序',
+    sortByCatalog: '默认排序'
   }
 }
 const GROUPS = [
@@ -237,7 +239,9 @@ const VARIANTS = [
     rows: [session('self', A)],
     probe: () => {
       const css = globalThis.document.head.children[0]?.textContent ?? ''
-      return /background:rgb\(from var\(--dsw-alias-bg-layer-2[^)]*\)\s*r g b \/ 1\)/.test(css)
+      // Anchored on the TOGGLE rule: the submenu rule re-states the same colour,
+      // so a bare `rgb(from … / 1)` test would pass on the wrong declaration.
+      return /div\.codexModelSelectGroupTitle\[data-dsh-group-toggle\]\{[^}]*background:rgb\(from var\(--dsw-alias-bg-layer-2[^)]*\)\s*r g b \/ 1\)/.test(css)
     },
     brokenValue: false
   },
@@ -559,6 +563,21 @@ const VARIANTS = [
     },
     probe: () => collapsed('Hy3 · x0.00'),
     brokenValue: 'false'
+  },
+  {
+    label: 'the name sort never writes an order (groups stay in catalog order)',
+    from: 'ranked.forEach((entry, index) => setOrder(entry.section, String(index)))',
+    to: 'void ranked',
+    rows: [session('self', A)],
+    drive: async () => {
+      clickOn(globalThis.document.body.querySelector('span[data-dsh-sort]'))
+      await settle()
+    },
+    probe: () =>
+      codexRowFor('DeepSeek-V41-Flash')
+        ?.closest('section.codexModelSelectGroup')
+        ?.getAttribute('style') ?? 'none',
+    brokenValue: 'none'
   }
 ]
 

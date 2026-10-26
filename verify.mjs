@@ -37,7 +37,9 @@ const DICTS = {
     expandGroup: '展开此提供商的模型',
     collapseGroup: '收起此提供商的模型',
     expandAll: '全部展开',
-    collapseAll: '全部折叠'
+    collapseAll: '全部折叠',
+    sortByName: '名称排序',
+    sortByCatalog: '默认排序'
   }
 }
 
@@ -97,6 +99,10 @@ const storedEffort = model =>
   JSON.parse(globalThis.localStorage.getItem(EFFORT_KEY) ?? 'null')?.[model] ?? undefined
 const headingFor = name =>
   sectionFor(name)?.querySelector('div.codexModelSelectGroupTitle') ?? null
+// The plugin sorts with the CSS `order` property on the section, never by moving
+// nodes: React re-renders from its own list and would undo a move.
+const sectionOrder = name =>
+  sectionFor(name)?.getAttribute('style')?.match(/order:\s*(-?\d+)/)?.[1] ?? null
 
 async function start({ rows, groups = GROUPS, mount = true, defaultSelection, keepCollapse = false, blockedSessions, residentDirectories, stubbornSessions }) {
   // The collapse memory is global to the browser, so every scenario except the
@@ -900,20 +906,43 @@ console.log('22. a conversation with a null selection does not disarm the decora
   ctx.dispose()
 }
 
-// --- 23. one icon folds or unfolds every group ----------------------------
-// The control carries no text of its own: the wording lives in `title`, so the
-// pane keeps its height and the icon only explains itself on hover.
-console.log('23. one icon folds and unfolds every group')
+// --- 23. one row folds or unfolds every group, and sorts them ---------------
+// v0.1.3: the row shows its wording instead of hiding it in a tooltip, carries a
+// single chevron, and hosts the sort switch on the same line.
+console.log('23. one row folds and unfolds every group')
 {
   const ctx = await start({ rows: [session('self', A)] })
 
   const all = () => globalThis.document.body.querySelector('div[data-dsh-collapse-all]')
-  check('the pane carries the icon', all() !== null)
-  check('it is announced as a button', all()?.getAttribute('role') === 'button')
-  check('it is reachable by keyboard', all()?.getAttribute('tabindex') === '0')
-  check('it shows no text of its own', all()?.textContent === '')
-  check('the label is a hover title', all()?.getAttribute('title') === '全部折叠')
-  check('the icon faces the action a click makes', all()?.getAttribute('data-dsh-all') === 'expanded')
+  const label = () => all()?.querySelector('span[data-dsh-collapse-label]') ?? null
+  const sort = () => all()?.querySelector('span[data-dsh-sort]') ?? null
+  check('the pane carries the row', all() !== null)
+  check('it is announced as a button', label()?.getAttribute('role') === 'button')
+  check('it is reachable by keyboard', label()?.getAttribute('tabindex') === '0')
+  check('the row itself is not a button nesting the switch',
+    all()?.getAttribute('role') === null && all()?.getAttribute('tabindex') === null)
+  check('it names the action a click makes in text', all()?.textContent?.includes('全部折叠') === true)
+  check('the label restates the same wording', all()?.getAttribute('title') === '全部折叠')
+  check('the chevron faces the action a click makes', all()?.getAttribute('data-dsh-all') === 'expanded')
+
+  check('the sort switch shares the row', sort() !== null)
+  check('the sort switch starts out offering name order', sort()?.textContent === '名称排序')
+  check('the catalog order is the default', sectionOrder('Hy3 · x0.00') === null)
+
+  clickOn(sort())
+  await settle()
+  check('switching to names reorders the groups',
+    sectionOrder('DeepSeek-V41-Flash') === '0' && sectionOrder('Hy3 · x0.00') === '1')
+  check('the switch now offers the catalog order back', sort()?.textContent === '默认排序')
+  check('the choice is remembered',
+    globalThis.localStorage.getItem('dsh-model-in-use:sort-by-name') === 'name')
+  check('a click on the switch never folds anything',
+    collapsedState('Hy3 · x0.00') === 'false' && collapsedState('DeepSeek-V41-Flash') === 'false')
+
+  clickOn(sort())
+  await settle()
+  check('switching back drops every order declaration',
+    sectionOrder('Hy3 · x0.00') === null && sectionOrder('DeepSeek-V41-Flash') === null)
 
   clickOn(all())
   await settle()
@@ -921,7 +950,8 @@ console.log('23. one icon folds and unfolds every group')
     collapsedState('Hy3 · x0.00') === 'true' && collapsedState('DeepSeek-V41-Flash') === 'true')
   const stored = JSON.parse(globalThis.localStorage.getItem(COLLAPSE_KEY) ?? 'null')
   check('the whole set is remembered', stored?.workbuddyai === true && stored?.['deepseek-account'] === true)
-  check('the icon now offers to unfold', all()?.getAttribute('title') === '全部展开')
+  check('the row now offers to unfold', all()?.getAttribute('title') === '全部展开')
+  check('and says so in text too', all()?.textContent?.includes('全部展开') === true)
   check('and turns around to say so', all()?.getAttribute('data-dsh-all') === 'collapsed')
 
   clickOn(all())
@@ -929,10 +959,10 @@ console.log('23. one icon folds and unfolds every group')
   check('a second click unfolds them again',
     collapsedState('Hy3 · x0.00') === 'false' && collapsedState('DeepSeek-V41-Flash') === 'false')
 
-  // Folding one group by hand must not leave the icon claiming "unfold".
+  // Folding one group by hand must not leave the row claiming "unfold".
   clickOn(headingFor('Hy3 · x0.00'))
   await settle()
-  check('a manual fold leaves the icon offering to fold',
+  check('a manual fold leaves the row offering to fold',
     all()?.getAttribute('title') === '全部折叠')
 
   keyOn(all(), 'Enter')
@@ -940,7 +970,7 @@ console.log('23. one icon folds and unfolds every group')
   check('Enter folds them all', collapsedState('DeepSeek-V41-Flash') === 'true')
 
   ctx.dispose()
-  check('dispose takes the icon with it',
+  check('dispose takes the row with it',
     globalThis.document.body.querySelector('div[data-dsh-collapse-all]') === null)
 }
 

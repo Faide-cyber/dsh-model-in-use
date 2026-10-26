@@ -32,7 +32,8 @@
 | **分组级圆点** | 该分组内任一模型被占用时，标题前也点一个小圆点——分组折叠后仍能看出「这里面有模型在跑」 |
 | **推理档位记忆** | 为某个模型选过的推理档位被记住；切走再切回、或**新开对话**选同一模型，都会恢复上次的档位 |
 | **折叠记忆** | 每个服务商分组可折叠，状态记在 `localStorage`，重开菜单或刷新页面均保留 |
-| **一键全折叠** | 分组列表上沿有一个图标，一次折叠或展开全部分组。图标本身不带文字，悬停才显示「全部折叠」/「全部展开」 |
+| **一键全折叠** | 分组列表上沿有一行控件，点一次折叠或展开全部分组。文案随状态切换「全部折叠」/「全部展开」，折角指向上一次点击的效果 |
+| **名称排序** | 同一行右侧的「名称排序」开关，按服务商显示名首字母重排分组；再点一次回到目录顺序。排序只写 CSS `order`，不动 React 管的 DOM |
 | **间距修正** | 分组间距按**视觉顺序**排布，不再出现某两个分组贴在一起 |
 | **吸顶不透明** | 吸顶的分组标题底色钉为不透明，二级菜单文字不再从标题下方透出 |
 | **悬浮详情** | 会话悬浮卡的「进行中」后追加当前模型与推理档位，如 `进行中 ● Deepseek-V4.1-Flash · x0.00 Low` |
@@ -137,6 +138,23 @@ background: rgb(from var(--dsw-alias-bg-layer-2, #2c2c2e) r g b / 1);
 > `/ 1` 不能省。相对颜色语法中**省略 alpha 不等于 1**，它会继承**源颜色**的 alpha（见 [MDN: Using relative colors](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Colors/Using_relative_colors)：*"If the alpha channel value is not explicitly specified, it defaults to the alpha channel value of the origin-color (not 100%)"*）。写成 `rgb(from … r g b)` 会原样复现半透明，文字照样透出。
 
 `verify.mjs` 场景 14 与 `negative-proof.mjs` 变体 12 均钉住这一条，后者就是删掉 `/ 1` 的单点改写。
+
+### 二级菜单（`codexModelSelectSubmenu`）同样钉不透明
+
+模型/推理档位/速度/详细度四个 pane 都挂在 `div.codexModelSelectSubmenu` 上，上游给它的是同一个半透明层 token。这里复用上面同一手法钉 alpha，规则只针对 submenu，不碰一级菜单：
+
+```css
+div.codexModelSelectSubmenu {
+  background: var(--dsw-alias-bg-layer-2, #2c2c2e);
+  background: rgb(from var(--dsw-alias-bg-layer-2, #2c2c2e) r g b / 1);
+}
+```
+
+### 名称排序：只写 `order`，不动 DOM
+
+分组顺序归 React 所有，插件碰节点顺序就会和它打架。排序实现为给每个 `<section>` 写一条 inline `order` 声明，回退时只剥掉 `order:` 这一段、其余 inline 声明原样保留（`setOrder`），所以关掉排序不会误删别的插件写在同一 `style` 属性里的东西。
+
+`dispose` 里同样只调 `setOrder(section, '')`，不 `removeAttribute('style')`。
 
 ### 为什么走 DOM 装饰
 
