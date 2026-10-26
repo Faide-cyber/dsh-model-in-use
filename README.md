@@ -150,6 +150,17 @@ div.codexModelSelectSubmenu {
 }
 ```
 
+### 列表底部被裁：submenu 改成 flex 列
+
+上游 submenu 是 `max-height:360px; overflow:hidden`，里面的滚动区却自带固定 `max-height:352px`。多出来的折叠行占用高度后两者之和溢出，**最后几家供应商被 submenu 的 `overflow:hidden` 裁掉，滚也滚不到**。修法是把 submenu 变成 flex 列、让滚动区吃掉剩余高度，溢出重新落回会滚动的那个盒子里：
+
+```css
+div.codexModelSelectSubmenu { display: flex; flex-direction: column; }
+div.codexModelSelectGroups { flex: 1 1 auto; min-height: 0; max-height: none; }
+```
+
+`min-height:0` 不可省——flex 子项的默认 `min-height:auto` 会让它撑到内容高度，`flex:1 1 auto` 就不起作用了。
+
 ### 名称排序：只写 `order`，不动 DOM
 
 分组顺序归 React 所有，插件碰节点顺序就会和它打架。排序实现为给每个 `<section>` 写一条 inline `order` 声明，回退时只剥掉 `order:` 这一段、其余 inline 声明原样保留（`setOrder`），所以关掉排序不会误删别的插件写在同一 `style` 属性里的东西。

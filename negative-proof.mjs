@@ -578,6 +578,24 @@ const VARIANTS = [
         ?.closest('section.codexModelSelectGroup')
         ?.getAttribute('style') ?? 'none',
     brokenValue: 'none'
+  },
+  {
+    // The extra row above the list is height the shipped submenu never budgeted
+    // for. Without the flex column on the submenu, `flex:1 1 auto` on the
+    // scroller does nothing, the scroller keeps its full 352px, and the last
+    // providers are clipped by the submenu's `overflow:hidden` where scrolling
+    // cannot reach them. No DOM assertion can see this — the fixture has no
+    // layout engine — so the probe reads the injected stylesheet.
+    label: 'the group list stops absorbing height (last providers get clipped)',
+    from: 'div.codexModelSelectSubmenu{display:flex;flex-direction:column;background:',
+    to: 'div.codexModelSelectSubmenu{background:',
+    rows: [session('self', A)],
+    probe: () => {
+      const css = globalThis.document.head.children[0]?.textContent ?? ''
+      return /div\.codexModelSelectSubmenu\{[^}]*display:flex[^}]*flex-direction:column/.test(css) &&
+        /div\.codexModelSelectGroups\{[^}]*max-height:none/.test(css)
+    },
+    brokenValue: false
   }
 ]
 

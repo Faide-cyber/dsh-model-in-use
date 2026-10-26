@@ -458,6 +458,16 @@ console.log('14. the stylesheet keeps the rules that fix the reported glitches')
   check('and the alpha is pinned, not inherited from the origin colour',
     !/background:rgb\(from var\(--dsw-alias-bg-layer-2[^)]*\)\s*r g b\)/.test(css))
   check('and keeps a fallback first', /background:var\(--dsw-alias-bg-layer-2/.test(css))
+  // The row above the scroller is extra height the shipped submenu never budgeted
+  // for: it is `max-height:360px; overflow:hidden` while the scroller inside is a
+  // fixed `max-height:352px`. Their sum overflows, and the last providers get
+  // clipped where scrolling cannot reach. Making the submenu a flex column and
+  // letting the scroller absorb the leftover height is what unwedges it.
+  check('the submenu lays its panes out as a flex column',
+    /div\.codexModelSelectSubmenu\{[^}]*display:flex[^}]*flex-direction:column/.test(css))
+  check('the group list absorbs the leftover height instead of pinning a max',
+    /div\.codexModelSelectGroups\{[^}]*max-height:none/.test(css) &&
+    /div\.codexModelSelectGroups\{[^}]*flex:1 1 auto/.test(css))
   check('the dot colour is the requested green', css.includes('background:#3cc400'))
   check('the group dot only shows when flagged',
     /section\[data-dsh-group-in-use="true"\]>div\.codexModelSelectGroupTitle\[data-dsh-group-toggle\]::before/.test(css))
