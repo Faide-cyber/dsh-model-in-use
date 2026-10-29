@@ -247,8 +247,10 @@ composer 的模型下拉落在 `conversation.input.model` 这个 `single` 槽上
 宿主给每轮回复尾部的操作行（`_1KfHza_actions` / `cVfUIq_actions`）留了 `conversation.chat.assistant-actions` 这个 list Slot，框架会把 `messageId` 连同 `useChat` 等 hook 一起交给组件。速度就从 `useChat(s => s.legacy.nodes)` 里取：
 
 - 先按 `messageId` 找到这条回复所属的 `turn`，再挑出**同一 turn** 的全部 `kind: 'assistant'` 节点；
-- 每个节点自带 `timing.firstTokenTime` 与 `timing.completedTime`，解码窗口是两者之差，token 数是 `usage.outputTokens`；
-- 整轮的速度 = 各段 token 之和 ÷ 各段解码窗口之和。
+- 每个节点自带 `timing.stepStartTime` 与 `timing.completedTime`，窗口是两者之差，token 数是 `usage.outputTokens`；
+- 整轮的速度 = 各段 token 之和 ÷ 各段窗口之和。
+
+窗口起点用 `stepStartTime` 而不是 `firstTokenTime`：后者只由实时流写入，凡是重新加载页面后从历史回放出来的轮次它都是 `null`，用它会一整页都显示不出速度。以 step 起点为锚，刷新前后数字也保持一致。
 
 为什么不复用会话统计 `sessionStats`：那是**整个会话的累计**，一轮一个新数字才符合直觉，而累计值在一轮之内几乎不动。工具调用会把一轮拆成多段，所以必须按 `turn` 汇总而不是只看收尾那一段——`negative-proof.mjs` 变体 34 钉住这一点。取整规则与宿主一致：≥10 取整，<10 保留一位小数（否则 `2.5` 会显示成 `0`）。
 

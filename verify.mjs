@@ -785,10 +785,10 @@ console.log('18b. a turn states its own decode rate on its action line')
     usage: { outputTokens: output }
   })
   const nodes = [
-    step(1, 'm1', 0, 1000, 2000, 186), // 186 tokens in 1.0s
-    step(2, 'm2', 3000, 4000, 5000, 3), // 3 tokens in 1.0s
+    step(1, 'm1', 1000, 1000, 2000, 186), // 186 tokens in 1.0s
+    step(2, 'm2', 4000, 4000, 5000, 3), // 3 tokens in 1.0s
     { kind: 'tool-result', turn: 2 }, // a tool result is not a step
-    step(2, 'm3', 6000, 7000, 8000, 12) // same turn split by the tool call
+    step(2, 'm3', 7000, 7000, 8000, 12) // same turn split by the tool call
   ]
   const ctx = await start({ rows: [session('self', A)], mount: false })
 
@@ -806,12 +806,21 @@ console.log('18b. a turn states its own decode rate on its action line')
   check('a slow turn states one decimal', rateOf('m2') === '7.5 tok/s')
   check('a turn split by a tool call sums both steps',
     rateOf('m3') === '7.5 tok/s' && rateOf('m2') === rateOf('m3'))
-  check('an unknown message states nothing', rateOf('nope') === '')
-  check('a message with no output states nothing',
+  // A turn read back from history carries no irstTokenTime — only the live
+  // stream ever writes it — so anchoring on it left every reloaded turn blank.
+  check('a turn read back from history still states its rate',
+    rate?.component({
+      messageId: 'm5',
+      useChat: () => [step(5, 'm5', 10000, null, 12000, 200)]
+    })?.props?.['data-dsh-turn-speed-rate'] === '100 tok/s')
+  // No rate means no element at all: an empty span would still take the line's 8px
+  // side padding and read as a gap between the icons.
+  check('an unknown message draws nothing', rateOf('nope') === undefined)
+  check('a message with no output draws nothing',
     rate?.component({
       messageId: 'm4',
       useChat: () => [step(4, 'm4', 0, 1000, 2000, 0)]
-    })?.props?.['data-dsh-turn-speed-rate'] === '')
+    }) === null)
 
   const css = document.head.querySelector('style[id="dsh-model-in-use-style"]')?.textContent ?? ''
   check('the rate borrows the action line metrics',

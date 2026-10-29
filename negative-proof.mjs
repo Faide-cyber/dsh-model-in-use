@@ -607,8 +607,9 @@ const VARIANTS = [
     rows: [],
     from: 'if (node?.kind !== \'assistant\' || node.turn !== turn) continue',
     to: 'if (node?.kind !== \'assistant\' || node.messageId !== messageId) continue',
-    nodes: [      { kind: 'assistant', turn: 1, messageId: 'm1', timing: { firstTokenTime: 0, completedTime: 1000 }, usage: { outputTokens: 300 } },
-      { kind: 'assistant', turn: 1, messageId: 'm2', timing: { firstTokenTime: 5000, completedTime: 8000 }, usage: { outputTokens: 100 } }
+    nodes: [
+      { kind: 'assistant', turn: 1, messageId: 'm1', timing: { stepStartTime: 0, completedTime: 1000 }, usage: { outputTokens: 300 } },
+      { kind: 'assistant', turn: 1, messageId: 'm2', timing: { stepStartTime: 5000, completedTime: 8000 }, usage: { outputTokens: 100 } }
     ],
     probe: ctx => {
       const entry = ctx.slotEntries.find(item => item.options.name === 'conversation.chat.assistant-actions')
