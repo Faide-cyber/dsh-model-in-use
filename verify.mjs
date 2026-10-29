@@ -39,7 +39,9 @@ const DICTS = {
     expandAll: '全部展开',
     collapseAll: '全部折叠',
     sortByName: '名称排序',
-    sortByCatalog: '默认排序'
+    sortByCatalog: '默认排序',
+    tokensPerSecond: '{tps} tok/s',
+    speedHint: '这段对话的平均输出速度'
   }
 }
 
@@ -766,6 +768,57 @@ console.log('18. existing selections seed memory and a later conversation restor
 
   ctx.dispose()
   check('the sidebar hover contribution unloads with the plugin', ctx.slotEntries.length === 0)
+}
+
+// --- 18b. a turn states its own decode rate on its action line -------------
+console.log('18b. a turn states its own decode rate on its action line')
+{
+  // Each assistant step records when its first token landed and when it
+  // finished, so a turn's rate is its own: the sum of its steps' output tokens
+  // over the sum of their decode windows. A tool call in the middle splits one
+  // turn into two steps, and both must count.
+  const step = (turn, messageId, start, first, done, output) => ({
+    kind: 'assistant',
+    turn,
+    messageId,
+    timing: { stepStartTime: start, firstTokenTime: first, completedTime: done },
+    usage: { outputTokens: output }
+  })
+  const nodes = [
+    step(1, 'm1', 0, 1000, 2000, 186), // 186 tokens in 1.0s
+    step(2, 'm2', 3000, 4000, 5000, 3), // 3 tokens in 1.0s
+    { kind: 'tool-result', turn: 2 }, // a tool result is not a step
+    step(2, 'm3', 6000, 7000, 8000, 12) // same turn split by the tool call
+  ]
+  const ctx = await start({ rows: [session('self', A)], mount: false })
+
+  const rate = ctx.slotEntries.find(entry => entry.options.name === 'conversation.chat.assistant-actions')
+  check('the turn-rate contribution uses the assistant-actions Slot', rate !== undefined)
+  check('the rate keeps its own id', rate?.options.id === 'dsh-model-in-use:speed')
+  check('the rate is its own registration with the plugin locale',
+    rate?.options.order === 10 && rate?.options.locale === 'dsh-model-in-use')
+
+  const rateOf = messageId =>
+    rate?.component({ messageId, useChat: () => nodes })?.props?.['data-dsh-turn-speed-rate']
+  check('a turn states its own decode rate', rateOf('m1') === '186 tok/s')
+  // Below ten a whole number would read as 0, so one decimal is kept — the same
+  // rule the host uses for its own readout.
+  check('a slow turn states one decimal', rateOf('m2') === '7.5 tok/s')
+  check('a turn split by a tool call sums both steps',
+    rateOf('m3') === '7.5 tok/s' && rateOf('m2') === rateOf('m3'))
+  check('an unknown message states nothing', rateOf('nope') === '')
+  check('a message with no output states nothing',
+    rate?.component({
+      messageId: 'm4',
+      useChat: () => [step(4, 'm4', 0, 1000, 2000, 0)]
+    })?.props?.['data-dsh-turn-speed-rate'] === '')
+
+  const css = document.head.querySelector('style[id="dsh-model-in-use-style"]')?.textContent ?? ''
+  check('the rate borrows the action line metrics',
+    css.includes('[data-dsh-turn-speed]{box-sizing:border-box;height:calc(28px'))
+
+  ctx.dispose()
+  check('the turn-rate contribution unloads with the plugin', ctx.slotEntries.length === 0)
 }
 
 // --- 19. resident blank directories reconcile without a model-row select ----

@@ -37,6 +37,7 @@
 | **间距修正** | 分组间距按**视觉顺序**排布，不再出现某两个分组贴在一起 |
 | **吸顶不透明** | 吸顶的分组标题底色钉为不透明，二级菜单文字不再从标题下方透出 |
 | **悬浮详情** | 会话悬浮卡的「进行中」后追加当前模型与推理档位，如 `进行中 ● Deepseek-V4.1-Flash · x0.00 Low` |
+| **每轮速度** | 每轮回复尾部的操作行（复制按钮旁）显示该轮自身的 `186 tok/s`；同一轮被工具调用拆成多段时按整轮合计 |
 
 关于占用标记：
 
@@ -240,6 +241,16 @@ composer 的模型下拉落在 `conversation.input.model` 这个 `single` 槽上
 - `CodexModelSelect` 把菜单**内联渲染在 composer 子树深处**（源码中没有 `createPortal`），打开菜单只会往 `<body>` 的深层子孙插入节点，`<body>` 自身的 childList 不变。因此 `<body>` 的观察者必须带 `subtree: true`，否则菜单打开对插件完全不可见；但裸的 subtree 观察会在每个流式 token 上触发，所以 mutation records 先经 `paneTouched()` 过滤，只有「增删了 `codexModelSelectGroups`」才唤醒一次 `scan()`。
 
 `verify.mjs` 场景 4 与 `negative-proof.mjs` 变体 6 钉住这一条。
+
+### 每轮速度：按该轮自己的解码窗口算
+
+宿主给每轮回复尾部的操作行（`_1KfHza_actions` / `cVfUIq_actions`）留了 `conversation.chat.assistant-actions` 这个 list Slot，框架会把 `messageId` 连同 `useChat` 等 hook 一起交给组件。速度就从 `useChat(s => s.legacy.nodes)` 里取：
+
+- 先按 `messageId` 找到这条回复所属的 `turn`，再挑出**同一 turn** 的全部 `kind: 'assistant'` 节点；
+- 每个节点自带 `timing.firstTokenTime` 与 `timing.completedTime`，解码窗口是两者之差，token 数是 `usage.outputTokens`；
+- 整轮的速度 = 各段 token 之和 ÷ 各段解码窗口之和。
+
+为什么不复用会话统计 `sessionStats`：那是**整个会话的累计**，一轮一个新数字才符合直觉，而累计值在一轮之内几乎不动。工具调用会把一轮拆成多段，所以必须按 `turn` 汇总而不是只看收尾那一段——`negative-proof.mjs` 变体 34 钉住这一点。取整规则与宿主一致：≥10 取整，<10 保留一位小数（否则 `2.5` 会显示成 `0`）。
 
 ---
 

@@ -35,7 +35,9 @@ const DICTS = {
     expandAll: '全部展开',
     collapseAll: '全部折叠',
     sortByName: '名称排序',
-    sortByCatalog: '默认排序'
+    sortByCatalog: '默认排序',
+    tokensPerSecond: '{tps} tok/s',
+    speedHint: '这段对话的平均输出速度'
   }
 }
 const GROUPS = [
@@ -596,6 +598,24 @@ const VARIANTS = [
         /div\.codexModelSelectGroups\{[^}]*max-height:none/.test(css)
     },
     brokenValue: false
+  },
+  {
+    // A turn split by a tool call is served by two assistant steps. Keying the
+    // sums on the closing step's own message id drops the earlier step and the
+    // rate silently becomes that of the last fragment only.
+    label: 'the turn rate reads only the closing step of a tool-split turn',
+    rows: [],
+    from: 'if (node?.kind !== \'assistant\' || node.turn !== turn) continue',
+    to: 'if (node?.kind !== \'assistant\' || node.messageId !== messageId) continue',
+    nodes: [      { kind: 'assistant', turn: 1, messageId: 'm1', timing: { firstTokenTime: 0, completedTime: 1000 }, usage: { outputTokens: 300 } },
+      { kind: 'assistant', turn: 1, messageId: 'm2', timing: { firstTokenTime: 5000, completedTime: 8000 }, usage: { outputTokens: 100 } }
+    ],
+    probe: ctx => {
+      const entry = ctx.slotEntries.find(item => item.options.name === 'conversation.chat.assistant-actions')
+      const props = { messageId: 'm2', useChat: () => ctx.proofNodes }
+      return entry?.component(props)?.props?.['data-dsh-turn-speed-rate'] ?? 'none'
+    },
+    brokenValue: '33 tok/s'
   }
 ]
 
@@ -655,6 +675,9 @@ for (const [index, variant] of VARIANTS.entries()) {
       stubbornSessions: variant.stubbornSessions
     })
     const { exports } = await loadClient(tempPath)
+    // Variants that probe a slot component hand it their own data through the
+    // context, so the component's hook can be a plain stub.
+    if (variant.nodes !== undefined) ctx.proofNodes = variant.nodes
 
     // Some rules only matter for state that already exists when the plugin
     // activates (an own `select` installed by another plugin has to be there

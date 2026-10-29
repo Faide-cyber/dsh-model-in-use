@@ -42,6 +42,15 @@ export function el(tag, attrs = {}, children = []) {
       return this.parent
     }
   })
+  // The sidebar label goes right after the host's own time text, which the
+  // plugin addresses as `time.nextSibling` the way it would in a real page.
+  Object.defineProperty(node, 'nextSibling', {
+    get() {
+      const siblings = this.parent?.children
+      if (siblings === undefined) return null
+      return siblings[siblings.indexOf(this) + 1] ?? null
+    }
+  })
   Object.defineProperty(node, 'title', {
     get() {
       return this.attrs.title ?? ''
@@ -530,11 +539,14 @@ export function stubCtx({ rows, groups, dictionaries, defaultSelection = { provi
     inject: (_names, callback) => callback(ctx),
     locale: {
       register: () => () => {},
-      bind: namespace => key => {
+      bind: namespace => (key, params) => {
         const dict = dictionaries[namespace]
         if (dict === undefined) throw new Error(`fixture: no dictionary for namespace "${namespace}"`)
         if (!(key in dict)) throw new Error(`fixture: missing key "${namespace}:${key}"`)
-        return dict[key]
+        // The host fills `{name}` placeholders before handing the string over;
+        // the wording is otherwise verbatim, so templates stay in the dictionary.
+        return dict[key].replace(/\{(\w+)\}/g, (whole, name) =>
+          params !== undefined && name in params ? String(params[name]) : whole)
       }
     },
     slots: {
